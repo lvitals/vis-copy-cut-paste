@@ -8,23 +8,33 @@ function M.copy_selection()
 	local win = vis.win
 	local sel = win.selection
 
-	if sel and sel.range and sel.range.start ~= sel.range.finish then
-		local start = sel.range.start
-		local finish = sel.range.finish
-		local text = win.file:content(start, finish)
+	if sel and sel.range then
+		local text = win.file:content(sel.range)
 
-		local tmpfile = os.tmpname()
-		local file = io.open(tmpfile, "w")
-		if file then
-			file:write(text)
-			file:close()
-			os.execute(string.format("vis-clipboard --copy < %s", tmpfile))
-			os.remove(tmpfile)
-		else
-			vis:info("Failed to create temporary file.")
-		end
-	else
-		vis:info("No text selected.")
+		-- Debug output to inspect selection
+        -- vis:info("text: " .. text)
+
+        local tmpfile = os.tmpname()
+        local file = io.open(tmpfile, "w")
+        if not file then
+            vis:info("Failed to create temporary file.")
+            return
+        end
+
+        file:write(text)
+        file:close()
+
+        -- Execute clipboard command and ensure tmpfile is removed
+        local success, result = pcall(function()
+            return os.execute(string.format("vis-clipboard --copy < %s", tmpfile))
+        end)
+        os.remove(tmpfile)
+
+        if success and (result == 0 or result == true) then
+            vis:feedkeys("<Escape>")
+        else
+            vis:info("Failed to copy to clipboard: vis-clipboard command failed.")
+        end
 	end
 end
 
@@ -36,25 +46,34 @@ function M.cut_selection()
 	if sel and sel.range and sel.range.start ~= sel.range.finish then
 		local start = sel.range.start
 		local finish = sel.range.finish
-		local text = win.file:content(start, finish)
+		local text = win.file:content(sel.range)
 
-		local tmpfile = os.tmpname()
-		local file = io.open(tmpfile, "w")
-		if file then
-			file:write(text)
-			file:close()
-			os.execute(string.format("vis-clipboard --copy < %s", tmpfile))
-			os.remove(tmpfile)
+        -- Debug output to inspect selection
+        -- vis:info("start: " .. start .. ", finish: " .. finish .. ", text: " .. text)
 
-			win.file:delete(start, finish - start)
+        local tmpfile = os.tmpname()
+        local file = io.open(tmpfile, "w")
+        if not file then
+            vis:info("Failed to create temporary file.")
+            return
+        end
 
-			win.selection:remove()
+        file:write(text)
+        file:close()
 
-			-- Force exit VISUAL mode to NORMAL mode
-			vis:feedkeys("<Escape>")
-		else
-			vis:info("Failed to create temporary file.")
-		end
+        -- Execute clipboard command and ensure tmpfile is removed
+        local success, result = pcall(function()
+            return os.execute(string.format("vis-clipboard --copy < %s", tmpfile))
+        end)
+        os.remove(tmpfile)
+
+        if success and (result == 0 or result == true) then
+            win.file:delete(start, finish - start)
+            win.selection.pos = start
+            vis:feedkeys("<Escape>")
+        else
+            vis:info("Failed to copy to clipboard: vis-clipboard command failed.")
+        end
 	else
 		vis:info("No text selected.")
 	end
